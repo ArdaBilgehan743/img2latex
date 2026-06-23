@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>img2latex</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0d0d0d;
+      --surface: #1a1a1a;
+      --surface2: #242424;
+      --border: #2e2e2e;
+      --text: #f0f0f0;
+      --text-muted: #888;
+      --accent: #7c3aed;
+      --accent-hover: #6d28d9;
+      --accent-light: rgba(124, 58, 237, 0.15);
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --radius: 10px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 20px 80px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+
+    header h1 {
+      font-size: 2.4rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      color: var(--text);
+    }
+
+    header h1 span {
+      color: var(--accent);
+    }
+
+    header p {
+      margin-top: 8px;
+      color: var(--text-muted);
+      font-size: 1rem;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px;
+      width: 100%;
+      max-width: 680px;
+    }
+
+    /* Drop zone */
+    #drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 48px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      position: relative;
+    }
+
+    #drop-zone:hover,
+    #drop-zone.dragover {
+      border-color: var(--accent);
+      background: var(--accent-light);
+    }
+
+    #drop-zone input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+    }
+
+    .drop-icon {
+      width: 48px;
+      height: 48px;
+      margin: 0 auto 16px;
+      color: var(--text-muted);
+    }
+
+    #drop-zone p {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+    }
+
+    #drop-zone p strong {
+      color: var(--accent);
+    }
+
+    /* Preview */
+    #preview-area {
+      display: none;
+      margin-top: 20px;
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      position: relative;
+    }
+
+    #preview-area img {
+      display: block;
+      max-height: 280px;
+      width: 100%;
+      object-fit: contain;
+    }
+
+    #preview-area .remove-btn {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      background: rgba(0,0,0,0.7);
+      border: none;
+      color: var(--text);
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s;
+    }
+
+    #preview-area .remove-btn:hover { background: var(--danger); }
+
+    /* Options */
+    .options-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .options-row label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      cursor: pointer;
+    }
+
+    .options-row input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
+    /* Convert button */
+    #convert-btn {
+      margin-top: 20px;
+      width: 100%;
+      padding: 14px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s, opacity 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    #convert-btn:hover:not(:disabled) { background: var(--accent-hover); }
+    #convert-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    .spinner {
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: none;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Progress steps */
+    #progress-area {
+      display: none;
+      margin-top: 24px;
+    }
+
+    .steps {
+      display: flex;
+      align-items: center;
+      gap: 0;
+    }
+
+    .step {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      flex: 1;
+    }
+
+    .step-dot {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: 2px solid var(--border);
+      background: var(--surface2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-muted);
+      transition: all 0.3s;
+      position: relative;
+      z-index: 1;
+    }
+
+    .step.active .step-dot {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .step.done .step-dot {
+      border-color: var(--success);
+      background: var(--success);
+      color: #fff;
+    }
+
+    .step-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 6px;
+      text-align: center;
+    }
+
+    .step.active .step-label,
+    .step.done .step-label { color: var(--text); }
+
+    .step-line {
+      flex: 1;
+      height: 2px;
+      background: var(--border);
+      margin-bottom: 22px;
+      transition: background 0.3s;
+    }
+
+    .step-line.done { background: var(--success); }
+
+    /* Result area */
+    #result-area {
+      display: none;
+      margin-top: 24px;
+    }
+
+    .result-success {
+      background: rgba(34, 197, 94, 0.1);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .result-success p { font-size: 0.9rem; color: var(--success); }
+
+    .download-btn {
+      padding: 10px 20px;
+      background: var(--success);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      white-space: nowrap;
+      transition: opacity 0.15s;
+    }
+
+    .download-btn:hover { opacity: 0.85; }
+
+    /* Error */
+    .error-card {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+    }
+
+    .error-card h3 {
+      font-size: 0.95rem;
+      color: var(--danger);
+      margin-bottom: 6px;
+    }
+
+    .error-card p {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    /* Warning (compile failed but LaTeX available) */
+    .warning-card {
+      background: rgba(245, 158, 11, 0.1);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+    }
+
+    .warning-card h3 {
+      font-size: 0.95rem;
+      color: var(--warning);
+      margin-bottom: 6px;
+    }
+
+    .warning-card p {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    /* Collapsible LaTeX source */
+    .latex-section {
+      margin-top: 16px;
+    }
+
+    .latex-toggle {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      padding: 8px 14px;
+      cursor: pointer;
+      transition: border-color 0.2s, color 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .latex-toggle:hover {
+      border-color: var(--accent);
+      color: var(--text);
+    }
+
+    .latex-pre-wrap {
+      display: none;
+      margin-top: 10px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: auto;
+      max-height: 360px;
+    }
+
+    .latex-pre-wrap pre {
+      padding: 16px;
+      font-family: 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+      font-size: 0.78rem;
+      line-height: 1.6;
+      color: #c8c8d0;
+      white-space: pre;
+    }
+
+    /* Reset link */
+    #reset-link {
+      display: none;
+      margin-top: 14px;
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      cursor: pointer;
+      text-decoration: underline;
+    }
+
+    #reset-link:hover { color: var(--text); }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>img<span>2</span>latex</h1>
+  <p>Convert any image to a LaTeX PDF — questions get solved automatically</p>
+</header>
+
+<div class="card">
+  <!-- Drop Zone -->
+  <div id="drop-zone">
+    <input type="file" id="file-input" accept="image/*" />
+    <svg class="drop-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <path stroke-linecap="round" stroke-linejoin="round"
+        d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
+    </svg>
+    <p><strong>Drag &amp; drop</strong> an image here, or click to browse</p>
+    <p style="margin-top:6px;font-size:0.8rem;">JPEG, PNG, WEBP, GIF, BMP, TIFF &mdash; up to 20 MB</p>
+  </div>
+
+  <!-- Image preview -->
+  <div id="preview-area">
+    <img id="preview-img" src="" alt="Preview" />
+    <button class="remove-btn" id="remove-btn" title="Remove image">&#x2715;</button>
+  </div>
+
+  <!-- Options -->
+  <div class="options-row">
+    <label>
+      <input type="checkbox" id="want-latex" />
+      Also show LaTeX source
+    </label>
+  </div>
+
+  <!-- Convert button -->
+  <button id="convert-btn" disabled>
+    <div class="spinner" id="spinner"></div>
+    <span id="btn-text">Convert to PDF</span>
+  </button>
+
+  <!-- Progress -->
+  <div id="progress-area">
+    <div class="steps">
+      <div class="step" id="step-1">
+        <div class="step-dot">1</div>
+        <div class="step-label">Analyzing</div>
+      </div>
+      <div class="step-line" id="line-1"></div>
+      <div class="step" id="step-2">
+        <div class="step-dot">2</div>
+        <div class="step-label">Generating LaTeX</div>
+      </div>
+      <div class="step-line" id="line-2"></div>
+      <div class="step" id="step-3">
+        <div class="step-dot">3</div>
+        <div class="step-label">Compiling PDF</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Result -->
+  <div id="result-area"></div>
+
+  <button id="reset-link">Start over with a new image</button>
+</div>
+
+<script>
+  const dropZone = document.getElementById('drop-zone');
+  const fileInput = document.getElementById('file-input');
+  const previewArea = document.getElementById('preview-area');
+  const previewImg = document.getElementById('preview-img');
+  const removeBtn = document.getElementById('remove-btn');
+  const convertBtn = document.getElementById('convert-btn');
+  const spinner = document.getElementById('spinner');
+  const btnText = document.getElementById('btn-text');
+  const progressArea = document.getElementById('progress-area');
+  const resultArea = document.getElementById('result-area');
+  const resetLink = document.getElementById('reset-link');
+  const wantLatexCheckbox = document.getElementById('want-latex');
+
+  let selectedFile = null;
+
+  // Drag & drop
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('dragover');
+    const file = e.dataTransfer.files[0];
+    if (file) setFile(file);
+  });
+
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files[0]) setFile(fileInput.files[0]);
+  });
+
+  removeBtn.addEventListener('click', () => resetFile());
+
+  function setFile(file) {
+    selectedFile = file;
+    const reader = new FileReader();
+    reader.onload = e => {
+      previewImg.src = e.target.result;
+      previewArea.style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+    convertBtn.disabled = false;
+    resultArea.style.display = 'none';
+    resultArea.innerHTML = '';
+    resetLink.style.display = 'none';
+    resetProgress();
+  }
+
+  function resetFile() {
+    selectedFile = null;
+    previewArea.style.display = 'none';
+    previewImg.src = '';
+    fileInput.value = '';
+    convertBtn.disabled = true;
+    resultArea.style.display = 'none';
+    resultArea.innerHTML = '';
+    resetLink.style.display = 'none';
+    resetProgress();
+  }
+
+  function resetProgress() {
+    ['step-1','step-2','step-3'].forEach(id => {
+      document.getElementById(id).className = 'step';
+    });
+    ['line-1','line-2'].forEach(id => {
+      document.getElementById(id).className = 'step-line';
+    });
+    progressArea.style.display = 'none';
+  }
+
+  function setStep(n) {
+    for (let i = 1; i <= 3; i++) {
+      const el = document.getElementById(`step-${i}`);
+      if (i < n) el.className = 'step done';
+      else if (i === n) el.className = 'step active';
+      else el.className = 'step';
+    }
+    for (let i = 1; i <= 2; i++) {
+      document.getElementById(`line-${i}`).className = i < n ? 'step-line done' : 'step-line';
+    }
+  }
+
+  convertBtn.addEventListener('click', async () => {
+    if (!selectedFile) return;
+    await runConversion();
+  });
+
+  resetLink.addEventListener('click', () => resetFile());
+
+  async function runConversion() {
+    const wantLatex = wantLatexCheckbox.checked;
+
+    // UI: loading state
+    convertBtn.disabled = true;
+    spinner.style.display = 'block';
+    btnText.textContent = 'Converting…';
+    resultArea.style.display = 'none';
+    resultArea.innerHTML = '';
+    resetLink.style.display = 'none';
+    progressArea.style.display = 'block';
+
+    // Simulate step progression while waiting
+    setStep(1);
+    const stepTimer1 = setTimeout(() => setStep(2), 4000);
+    const stepTimer2 = setTimeout(() => setStep(3), 12000);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+      formData.append('want_latex', wantLatex);
+
+      const response = await fetch('/api/convert', {
+        method: 'POST',
+        body: formData,
+      });
+
+      clearTimeout(stepTimer1);
+      clearTimeout(stepTimer2);
+
+      if (response.ok) {
+        setStep(4); // all done
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+
+        const disposition = response.headers.get('Content-Disposition') || '';
+        const match = disposition.match(/filename="(.+?)"/);
+        const filename = match ? match[1] : 'output.pdf';
+
+        let latexSource = null;
+        if (wantLatex) {
+          const encoded = response.headers.get('X-Latex-Source');
+          if (encoded) latexSource = atob(encoded);
+        }
+
+        showSuccess(url, filename, latexSource);
+      } else {
+        let errData;
+        try { errData = await response.json(); } catch { errData = { detail: 'Unknown error' }; }
+
+        if (response.status === 422 && errData.detail && errData.detail.latex_source) {
+          showCompileError(errData.detail);
+        } else {
+          const msg = typeof errData.detail === 'string' ? errData.detail : JSON.stringify(errData.detail);
+          showError(msg);
+        }
+      }
+    } catch (err) {
+      clearTimeout(stepTimer1);
+      clearTimeout(stepTimer2);
+      showError(`Network error: ${err.message}`);
+    } finally {
+      spinner.style.display = 'none';
+      btnText.textContent = 'Convert to PDF';
+      convertBtn.disabled = false;
+      resetLink.style.display = 'block';
+    }
+  }
+
+  function showSuccess(blobUrl, filename, latexSource) {
+    resultArea.style.display = 'block';
+    let html = `
+      <div class="result-success">
+        <p>PDF generated successfully!</p>
+        <a class="download-btn" href="${blobUrl}" download="${filename}">Download PDF</a>
+      </div>`;
+
+    if (latexSource) {
+      html += buildLatexSection(latexSource);
+    }
+
+    resultArea.innerHTML = html;
+    wireLatexToggle();
+  }
+
+  function showCompileError(detail) {
+    resultArea.style.display = 'block';
+    let html = `
+      <div class="warning-card">
+        <h3>LaTeX compilation failed</h3>
+        <p>${escapeHtml(detail.message || 'pdflatex could not compile the generated LaTeX.')}</p>
+      </div>`;
+
+    if (detail.latex_source) {
+      html += buildLatexSection(detail.latex_source, true);
+    }
+
+    resultArea.innerHTML = html;
+    wireLatexToggle();
+  }
+
+  function showError(message) {
+    resultArea.style.display = 'block';
+    resultArea.innerHTML = `
+      <div class="error-card">
+        <h3>Conversion failed</h3>
+        <p>${escapeHtml(message)}</p>
+      </div>`;
+  }
+
+  function buildLatexSection(latex, openByDefault = false) {
+    return `
+      <div class="latex-section">
+        <button class="latex-toggle" id="latex-toggle-btn">
+          <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M10 12l-6-6 1.4-1.4L10 9.2l4.6-4.6L16 6l-6 6z"/>
+          </svg>
+          Show LaTeX source
+        </button>
+        <div class="latex-pre-wrap" id="latex-pre-wrap" style="${openByDefault ? 'display:block' : ''}">
+          <pre>${escapeHtml(latex)}</pre>
+        </div>
+      </div>`;
+  }
+
+  function wireLatexToggle() {
+    const btn = document.getElementById('latex-toggle-btn');
+    const wrap = document.getElementById('latex-pre-wrap');
+    if (!btn || !wrap) return;
+    btn.addEventListener('click', () => {
+      const open = wrap.style.display === 'block';
+      wrap.style.display = open ? 'none' : 'block';
+      btn.querySelector('svg').style.transform = open ? '' : 'rotate(180deg)';
+      btn.childNodes[btn.childNodes.length - 1].textContent = open ? ' Show LaTeX source' : ' Hide LaTeX source';
+    });
+  }
+
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+</script>
+</body>
+</html>
